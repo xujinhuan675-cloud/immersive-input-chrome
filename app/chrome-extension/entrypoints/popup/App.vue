@@ -140,6 +140,40 @@
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
               </svg>
             </button>
+            <button class="entry-item" :disabled="guidePreviewBusy" @click="startGuidePreview">
+              <div class="entry-icon guide">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 3l7.5 4.5v9L12 21l-7.5-4.5v-9L12 3z"
+                  />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 1.5" />
+                </svg>
+              </div>
+              <div class="entry-content">
+                <span class="entry-title">Guide Preview</span>
+                <span class="entry-desc">Launch an immersive guide on this page</span>
+              </div>
+              <svg
+                class="entry-arrow"
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
             <button class="entry-item entry-item-coming-soon" @click="openWorkflowSidepanel">
               <div class="entry-icon workflow">
                 <WorkflowIcon />
@@ -333,6 +367,8 @@
 
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { GUIDE_ENTRY_SOURCES, GUIDE_PERMISSION_MODES } from '@/common/guide-types';
+import { buildGuideTitleFromIntent, launchGuideSession } from '@/common/guide-session-launcher';
 import {
   PREDEFINED_MODELS,
   type ModelPreset,
@@ -390,6 +426,7 @@ const rrFlows = ref<
 const rrOnlyBound = ref(false);
 const rrSearch = ref('');
 const currentTabUrl = ref<string>('');
+const guidePreviewBusy = ref(false);
 const filteredRrFlows = computed(() => {
   const base = rrOnlyBound.value ? rrFlows.value.filter(isFlowBoundToCurrent) : rrFlows.value;
   const q = rrSearch.value.trim().toLowerCase();
@@ -647,6 +684,48 @@ function openElementMarkerSidepanel() {
 // Open sidepanel for agent chat
 function openAgentSidepanel() {
   openSidepanelAndClose('agent-chat');
+}
+
+function isModelPreset(value: string): value is ModelPreset {
+  return value in PREDEFINED_MODELS;
+}
+
+async function startGuidePreview() {
+  if (guidePreviewBusy.value) return;
+  guidePreviewBusy.value = true;
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id || !tab.url) {
+      throw new Error('No active tab available for guide preview');
+    }
+
+    const taskId = `browser_preview_${Date.now()}`;
+    await launchGuideSession({
+      tabId: tab.id,
+      taskId,
+      title: buildGuideTitleFromIntent('Browser Guide Preview'),
+      summary: 'Phase-one immersive browser guide preview from the extension popup.',
+      source: GUIDE_ENTRY_SOURCES.MANUAL,
+      permissionMode: GUIDE_PERMISSION_MODES.CONFIRM,
+      metadata: {
+        preview: true,
+        entry: 'popup',
+        pageUrl: tab.url,
+      },
+      integration: {
+        bridgeKey: `browser:${taskId}`,
+        desktopHandoffEnabled: true,
+      },
+    });
+
+    window.close();
+  } catch (error) {
+    console.error('Failed to start guide preview:', error);
+    alert(`Guide preview failed: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    guidePreviewBusy.value = false;
+  }
 }
 
 async function toggleWebEditor() {
@@ -1375,7 +1454,12 @@ const confirmClearAllData = async () => {
   }
 };
 
-const switchModel = async (newModel: ModelPreset) => {
+const switchModel = async (newModelInput: string) => {
+  if (!isModelPreset(newModelInput)) {
+    console.warn(`Invalid model preset: ${newModelInput}`);
+    return;
+  }
+  const newModel: ModelPreset = newModelInput;
   console.log(`🔄 switchModel called with newModel: ${newModel}`);
 
   if (isModelSwitching.value) {
@@ -2558,6 +2642,11 @@ onUnmounted(() => {
   background: var(--ac-hover-bg, #f5f5f4);
 }
 
+.entry-item:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 .entry-icon {
   width: 40px;
   height: 40px;
@@ -2576,6 +2665,11 @@ onUnmounted(() => {
 .entry-icon.workflow {
   background: rgba(37, 99, 235, 0.12);
   color: #2563eb;
+}
+
+.entry-icon.guide {
+  background: rgba(14, 165, 233, 0.12);
+  color: #0ea5e9;
 }
 
 .entry-icon.marker {

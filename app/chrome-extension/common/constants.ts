@@ -235,6 +235,9 @@ export const STORAGE_KEYS = {
   RR_TRIGGERS: 'rr_triggers',
   // Persistent recording state (guards resume across navigations/service worker restarts)
   RR_RECORDING_STATE: 'rr_recording_state',
+  GUIDE_SESSIONS: 'guide_sessions',
+  GUIDE_BRIDGE_EVENTS: 'guide_bridge_events',
+  GUIDE_BRIDGE_STATES: 'guide_bridge_states',
 } as const;
 
 // Notification Configuration

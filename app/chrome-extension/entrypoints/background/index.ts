@@ -11,6 +11,7 @@ import { initWebEditorListeners } from './web-editor';
 import { initQuickPanelAgentHandler } from './quick-panel/agent-handler';
 import { initQuickPanelCommands } from './quick-panel/commands';
 import { initQuickPanelTabsHandler } from './quick-panel/tabs-handler';
+import { initGuideRuntimeListeners } from './guide-runtime';
 
 // Record-Replay V3 (feature flag)
 import { bootstrapV3 } from './record-replay-v3/bootstrap';
@@ -64,6 +65,8 @@ export default defineBackground(() => {
   initQuickPanelTabsHandler();
   // Quick Panel: keyboard shortcut handler
   initQuickPanelCommands();
+  // Immersive guide runtime: browser-side guide session management
+  initGuideRuntimeListeners();
 
   // Conditionally initialize semantic similarity engine if model cache exists
   initializeSemanticEngineIfCached()

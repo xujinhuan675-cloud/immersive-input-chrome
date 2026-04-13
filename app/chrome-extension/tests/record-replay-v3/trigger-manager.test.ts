@@ -11,7 +11,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FlowV3 } from '@/entrypoints/background/record-replay-v3/domain/flow';
-import type { RunRecordV3 } from '@/entrypoints/background/record-replay-v3/domain/events';
+import type {
+  RunEvent,
+  RunRecordV3,
+} from '@/entrypoints/background/record-replay-v3/domain/events';
 import type {
   TriggerKind,
   TriggerSpec,
@@ -51,20 +54,20 @@ function createSilentLogger(): Pick<Console, 'debug' | 'info' | 'warn' | 'error'
   };
 }
 
-interface TestHandler {
-  factory: TriggerHandlerFactory<TriggerKind>;
-  handler: TriggerHandler<TriggerKind>;
-  installed: Map<string, TriggerSpec>;
+interface TestHandler<K extends TriggerKind> {
+  factory: TriggerHandlerFactory<K>;
+  handler: TriggerHandler<K>;
+  installed: Map<string, Extract<TriggerSpec, { kind: K }>>;
   fire: (triggerId: string, ctx: { sourceTabId?: number; sourceUrl?: string }) => Promise<void>;
 }
 
-function createTestHandler(kind: TriggerKind): TestHandler {
-  const installed = new Map<string, TriggerSpec>();
+function createTestHandler<K extends TriggerKind>(kind: K): TestHandler<K> {
+  const installed = new Map<string, Extract<TriggerSpec, { kind: K }>>();
   let callback: TriggerFireCallback | null = null;
 
-  const handler: TriggerHandler<TriggerKind> = {
+  const handler: TriggerHandler<K> = {
     kind,
-    install: vi.fn(async (trigger: TriggerSpec) => {
+    install: vi.fn(async (trigger: Extract<TriggerSpec, { kind: K }>) => {
       installed.set(trigger.id, trigger);
     }),
     uninstall: vi.fn(async (triggerId: string) => {
@@ -76,7 +79,7 @@ function createTestHandler(kind: TriggerKind): TestHandler {
     getInstalledIds: vi.fn(() => Array.from(installed.keys())),
   };
 
-  const factory: TriggerHandlerFactory<TriggerKind> = (fireCallback) => {
+  const factory: TriggerHandlerFactory<K> = (fireCallback) => {
     callback = fireCallback;
     return handler;
   };
@@ -173,7 +176,9 @@ describe('V3 TriggerManager', () => {
     } as Pick<StoragePort, 'triggers' | 'flows' | 'runs' | 'queue'>;
 
     events = {
-      append: vi.fn(async (event) => ({ ...event, ts: time, seq: 1 }) as unknown),
+      append: vi.fn(
+        async (event): Promise<RunEvent> => ({ ...event, ts: time, seq: 1 }) as RunEvent,
+      ),
     };
 
     scheduler = {
@@ -670,10 +675,10 @@ describe('V3 TriggerManager', () => {
 
       // Make first install fail
       let callCount = 0;
-      const originalFactory: TriggerHandlerFactory<TriggerKind> = (fireCallback) => {
+      const originalFactory: TriggerHandlerFactory<'command'> = (fireCallback) => {
         const handler = factory(fireCallback);
         const originalInstall = handler.install;
-        handler.install = vi.fn(async (trigger: TriggerSpec) => {
+        handler.install = vi.fn(async (trigger) => {
           callCount++;
           if (callCount === 1) {
             throw new Error('Install failed');
@@ -730,7 +735,7 @@ describe('V3 TriggerManager', () => {
       ];
 
       let uninstallCallCount = 0;
-      const originalFactory: TriggerHandlerFactory<TriggerKind> = (fireCallback) => {
+      const originalFactory: TriggerHandlerFactory<'command'> = (fireCallback) => {
         const handler = factory(fireCallback);
         handler.uninstallAll = vi.fn(async () => {
           uninstallCallCount++;

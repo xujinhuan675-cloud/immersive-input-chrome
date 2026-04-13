@@ -8,3 +8,5 @@ export * from './node-spec';
 export * from './node-spec-registry';
 export * from './node-specs-builtin';
 export * from './agent-types';
+export * from './guide-types';
+export * from './guide-bridge-types';

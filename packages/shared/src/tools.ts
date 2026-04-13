@@ -12,6 +12,7 @@ export const TOOL_NAMES = {
     CLICK: 'chrome_click_element',
     FILL: 'chrome_fill_or_select',
     REQUEST_ELEMENT_SELECTION: 'chrome_request_element_selection',
+    IMMERSIVE_GUIDE: 'chrome_immersive_guide',
     GET_INTERACTIVE_ELEMENTS: 'chrome_get_interactive_elements',
     NETWORK_CAPTURE: 'chrome_network_capture',
     // Legacy tool names (kept for internal use, not exposed in TOOL_SCHEMAS)
@@ -1025,6 +1026,174 @@ export const TOOL_SCHEMAS: Tool[] = [
         },
       },
       required: ['requests'],
+    },
+  },
+  {
+    name: TOOL_NAMES.BROWSER.IMMERSIVE_GUIDE,
+    description:
+      'Create and control an immersive guide session in the browser. This lets an external AI turn a textual answer into an on-page guided flow with highlighting, step progression, and optional auto-detected anchors.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: [
+            'create',
+            'get',
+            'list',
+            'bridge_state',
+            'bridge_events',
+            'start',
+            'next',
+            'skip',
+            'cancel',
+            'attach_tab',
+            'request_handoff',
+            'accept_handoff',
+            'resume',
+          ],
+          description:
+            'Guide operation to perform. Use create to start a new immersive guide session; use get/list/bridge_state/bridge_events for polling state; use next/skip/cancel to control an existing session; use request_handoff/accept_handoff/resume for browser-to-desktop bridge flow.',
+        },
+        sessionId: {
+          type: 'string',
+          description:
+            'Required for get/bridge_state/start/next/skip/cancel/attach_tab/request_handoff/accept_handoff/resume. Existing guide session id.',
+        },
+        taskId: {
+          type: 'string',
+          description: 'Optional external task identifier when action=create.',
+        },
+        title: {
+          type: 'string',
+          description: 'Guide title shown to the user. Required when action=create.',
+        },
+        summary: {
+          type: 'string',
+          description: 'Optional short explanation of the task or goal for the guide.',
+        },
+        source: {
+          type: 'string',
+          enum: ['external_ai', 'plugin_chat', 'desktop_companion', 'manual'],
+          description:
+            'Origin of the guide request. Defaults to external_ai for MCP-triggered sessions.',
+        },
+        bridgeSource: {
+          type: 'string',
+          enum: ['browser_extension', 'immersive_input', 'external_ai'],
+          description:
+            'Optional bridge actor for bridge_state-related operations. Defaults to external_ai for MCP-triggered calls.',
+        },
+        target: {
+          type: 'string',
+          enum: ['browser', 'desktop', 'hybrid'],
+          description: 'Execution target for the guide or bridge handoff. Defaults to browser.',
+        },
+        permissionMode: {
+          type: 'string',
+          enum: ['readonly', 'confirm', 'auto'],
+          description:
+            'Permission mode for the guide session. Defaults to confirm for browser guidance.',
+        },
+        tabId: {
+          type: 'number',
+          description:
+            'Target tab ID for create or attach_tab. Defaults to the active tab when omitted.',
+        },
+        windowId: {
+          type: 'number',
+          description: 'Window ID used to resolve the active tab when tabId is omitted.',
+        },
+        start: {
+          type: 'boolean',
+          description:
+            'When action=create, start the guide immediately after creation. Defaults to true.',
+        },
+        useAutoAnchors: {
+          type: 'boolean',
+          description:
+            'When action=create and explicit steps are missing, auto-detect visible anchors from the page and build a preview guide. Defaults to true.',
+        },
+        steps: {
+          type: 'array',
+          description:
+            'Optional explicit guide steps for action=create. If omitted, the tool can auto-detect anchors on the current page.',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Optional custom step id.' },
+              title: { type: 'string', description: 'Step title shown in the guide UI.' },
+              description: {
+                type: 'string',
+                description: 'Optional description displayed under the step title.',
+              },
+              kind: {
+                type: 'string',
+                enum: [
+                  'highlight',
+                  'wait_for_user',
+                  'auto_click',
+                  'auto_fill',
+                  'assert',
+                  'handoff',
+                ],
+                description: 'Guide step kind. Defaults to highlight.',
+              },
+              target: {
+                type: 'string',
+                enum: ['browser', 'desktop', 'hybrid'],
+                description: 'Execution target for the step. Defaults to browser.',
+              },
+              anchor: {
+                type: 'object',
+                description: 'Optional selector-based anchor for the step.',
+                properties: {
+                  selector: { type: 'string', description: 'CSS or XPath selector.' },
+                  selectorType: {
+                    type: 'string',
+                    enum: ['css', 'xpath'],
+                    description: 'Selector type. Defaults to css.',
+                  },
+                  description: { type: 'string', description: 'Anchor description.' },
+                  urlPattern: {
+                    type: 'string',
+                    description: 'Optional URL pattern that the anchor applies to.',
+                  },
+                  markerId: {
+                    type: 'string',
+                    description: 'Optional marker id when using saved element markers.',
+                  },
+                },
+              },
+              instructions: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Optional step instructions shown to the user.',
+              },
+              payload: {
+                type: 'object',
+                description: 'Optional step payload for future automation extensions.',
+              },
+            },
+            required: ['title'],
+          },
+        },
+        metadata: {
+          type: 'object',
+          description:
+            'Optional session metadata stored with the guide session. Also used by bridge actions to carry handoff and resume metadata.',
+        },
+        integration: {
+          type: 'object',
+          description: 'Optional integration hints for Immersive-Input or other bridge consumers.',
+          properties: {
+            immersiveInputSessionId: { type: 'string' },
+            bridgeKey: { type: 'string' },
+            desktopHandoffEnabled: { type: 'boolean' },
+          },
+        },
+      },
+      required: ['action'],
     },
   },
   {

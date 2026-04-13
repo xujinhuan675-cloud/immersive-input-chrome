@@ -30,9 +30,26 @@ interface InstalledContextMenuTrigger {
 // ==================== Constants ====================
 
 const MENU_ITEM_PREFIX = 'rr_v3_';
+type MenuContexts = NonNullable<chrome.contextMenus.CreateProperties['contexts']>;
+type MenuContext = MenuContexts[number];
+const KNOWN_CONTEXTS: readonly MenuContext[] = [
+  'action',
+  'audio',
+  'browser_action',
+  'editable',
+  'frame',
+  'image',
+  'launcher',
+  'link',
+  'page',
+  'page_action',
+  'selection',
+  'video',
+  'all',
+] as const;
 
 // Default context types if not specified
-const DEFAULT_CONTEXTS: chrome.contextMenus.ContextType[] = ['page'];
+const DEFAULT_CONTEXTS: MenuContexts = ['page'];
 
 // ==================== Handler Implementation ====================
 
@@ -118,13 +135,14 @@ export function createContextMenuTriggerHandler(
   /**
    * Convert context types from spec to chrome API format
    */
-  function normalizeContexts(
-    contexts: ReadonlyArray<string> | undefined,
-  ): chrome.contextMenus.ContextType[] {
+  function normalizeContexts(contexts: ReadonlyArray<string> | undefined): MenuContexts {
     if (!contexts || contexts.length === 0) {
       return DEFAULT_CONTEXTS;
     }
-    return contexts as chrome.contextMenus.ContextType[];
+    const valid = contexts.filter((context): context is MenuContext =>
+      KNOWN_CONTEXTS.includes(context as MenuContext),
+    );
+    return (valid.length > 0 ? valid : DEFAULT_CONTEXTS) as MenuContexts;
   }
 
   return {

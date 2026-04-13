@@ -280,6 +280,46 @@
 
         <!-- Right Actions -->
         <div class="flex gap-2">
+          <button
+            type="button"
+            class="p-1 transition-colors cursor-pointer"
+            :style="guideActionButtonStyle"
+            :disabled="guideActionDisabled"
+            title="Start immersive guide"
+            aria-label="Start immersive guide"
+            @click="handleGuideStart"
+          >
+            <svg
+              v-if="isGuideStarting"
+              class="w-3.5 h-3.5 animate-spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <circle cx="12" cy="12" r="9" stroke-width="2" class="opacity-25" />
+              <path
+                d="M21 12a9 9 0 00-9-9"
+                stroke-width="2"
+                stroke-linecap="round"
+                class="opacity-90"
+              />
+            </svg>
+            <svg v-else class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6h16M4 12h10m-10 6h7"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M16 9l4 3-4 3"
+              />
+            </svg>
+          </button>
+
           <!-- Primary Action Button: Send (idle) / Stop (loading) -->
           <button
             type="button"
@@ -418,6 +458,8 @@ const props = defineProps<{
   cancelling: boolean;
   canCancel: boolean;
   canSend: boolean;
+  canStartGuide?: boolean;
+  isGuideStarting?: boolean;
   placeholder?: string;
   // Model selection props
   engineName?: string;
@@ -531,6 +573,15 @@ const primaryActionButtonStyle = computed(() => {
   };
 });
 
+const guideActionButtonStyle = computed(() => ({
+  borderRadius: 'var(--ac-radius-button)',
+  border: 'var(--ac-border-width) solid var(--ac-border)',
+  backgroundColor: props.canStartGuide ? 'var(--ac-surface)' : 'var(--ac-surface-muted)',
+  color: props.canStartGuide ? 'var(--ac-accent)' : 'var(--ac-text-subtle)',
+  cursor: props.canStartGuide ? 'pointer' : 'not-allowed',
+  opacity: props.isGuideStarting ? 0.9 : 1,
+}));
+
 /**
  * Whether the primary action button should be disabled.
  */
@@ -543,9 +594,14 @@ const primaryActionDisabled = computed(() => {
   return !props.canSend;
 });
 
+const guideActionDisabled = computed(() => {
+  return props.isGuideStarting === true || !props.canStartGuide || isRequestActive.value;
+});
+
 const emit = defineEmits<{
   'update:modelValue': [value: string];
   submit: [];
+  'guide:start': [];
   cancel: [];
   'attachment:add': [];
   'attachment:remove': [index: number];
@@ -639,6 +695,11 @@ function handlePrimaryAction(): void {
   } else {
     handleSubmit();
   }
+}
+
+function handleGuideStart(): void {
+  if (guideActionDisabled.value) return;
+  emit('guide:start');
 }
 
 function handleModelChange(event: Event): void {

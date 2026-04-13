@@ -18,6 +18,12 @@ import {
   type CssVarName,
 } from '@/entrypoints/web-editor-v2/core/design-tokens';
 
+function mockComputedStyle(getPropertyValue: (name: string) => string): CSSStyleDeclaration {
+  return {
+    getPropertyValue,
+  } as unknown as CSSStyleDeclaration;
+}
+
 // =============================================================================
 // Test Setup
 // =============================================================================
@@ -164,9 +170,9 @@ describe('token-resolver: resolveToken', () => {
     document.body.append(div);
 
     // Mock getComputedStyle
-    vi.spyOn(window, 'getComputedStyle').mockReturnValue({
-      getPropertyValue: (name: string) => (name === '--color' ? 'red' : ''),
-    } as CSSStyleDeclaration);
+    vi.spyOn(window, 'getComputedStyle').mockReturnValue(
+      mockComputedStyle((name: string) => (name === '--color' ? 'red' : '')),
+    );
 
     const resolver = createTokenResolver();
     const result = resolver.resolveToken(div, '--color');
@@ -180,9 +186,7 @@ describe('token-resolver: resolveToken', () => {
     const div = document.createElement('div');
     document.body.append(div);
 
-    vi.spyOn(window, 'getComputedStyle').mockReturnValue({
-      getPropertyValue: () => '',
-    } as CSSStyleDeclaration);
+    vi.spyOn(window, 'getComputedStyle').mockReturnValue(mockComputedStyle(() => ''));
 
     const resolver = createTokenResolver();
     const result = resolver.resolveToken(div, '--missing');
@@ -342,9 +346,7 @@ describe('design-tokens-service: basic operations', () => {
     document.body.append(div);
 
     // Mock to return no tokens
-    vi.spyOn(window, 'getComputedStyle').mockReturnValue({
-      getPropertyValue: () => '',
-    } as CSSStyleDeclaration);
+    vi.spyOn(window, 'getComputedStyle').mockReturnValue(mockComputedStyle(() => ''));
 
     const service = createDesignTokensService();
     const result = service.getContextTokens(div);
@@ -441,9 +443,9 @@ describe('design-tokens-service: resolveToken', () => {
     const div = document.createElement('div');
     document.body.append(div);
 
-    vi.spyOn(window, 'getComputedStyle').mockReturnValue({
-      getPropertyValue: (name: string) => (name === '--color' ? '#ff0000' : ''),
-    } as CSSStyleDeclaration);
+    vi.spyOn(window, 'getComputedStyle').mockReturnValue(
+      mockComputedStyle((name: string) => (name === '--color' ? '#ff0000' : '')),
+    );
 
     const service = createDesignTokensService();
     const result = service.resolveToken(div, '--color');

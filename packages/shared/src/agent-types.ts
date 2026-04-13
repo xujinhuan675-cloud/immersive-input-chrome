@@ -120,6 +120,26 @@ export interface AgentActRequest {
   displayText?: string;
 }
 
+/**
+ * Extension/client metadata stored alongside a user prompt.
+ * Kept open-ended so browser, desktop, and future Immersive-Input bridges
+ * can persist workflow-specific context without churning the base contract.
+ */
+export interface AgentActRequestClientMeta extends Record<string, unknown> {
+  kind?: string;
+}
+
+/**
+ * Metadata envelope persisted on chat messages.
+ * Used by the extension to render attachment chips and special prompt headers.
+ */
+export interface AgentMessageAttachmentMetadata {
+  attachments?: AttachmentMetadata[];
+  clientMeta?: AgentActRequestClientMeta;
+  displayText?: string;
+  fullContent?: string;
+}
+
 export interface AgentActResponse {
   requestId: string;
   sessionId: string;
@@ -236,6 +256,12 @@ export interface AgentSession {
   name?: string;
   /** Preview text from first user message, for display in session list */
   preview?: string;
+  /** Structured preview metadata for custom list rendering */
+  previewMeta?: {
+    displayText?: string;
+    clientMeta?: AgentActRequestClientMeta;
+    fullContent?: string;
+  };
   model?: string;
   permissionMode: string;
   allowDangerouslySkipPermissions: boolean;
@@ -397,12 +423,16 @@ export interface AttachmentMetadata {
  */
 export interface AttachmentProjectStats {
   projectId: string;
+  /** Optional human-readable project name from the projects table */
+  projectName?: string;
   /** Directory path for this project's attachments */
   dirPath: string;
   /** Whether the directory exists */
   exists: boolean;
   fileCount: number;
   totalBytes: number;
+  /** Whether the project still exists in the database */
+  existsInDb?: boolean;
   /** Last modification timestamp (only when exists is true) */
   lastModifiedAt?: string;
 }

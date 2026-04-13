@@ -4,6 +4,19 @@
  */
 
 import type { RealtimeEvent } from 'chrome-mcp-shared';
+import type {
+  GuideIntegrationHints,
+  GuidePermissionMode,
+  GuideRuntimeSnapshot,
+  GuideSession,
+  GuideTarget,
+  GuideStep,
+} from '@/common/guide-types';
+import type {
+  GuideBridgeEventRecord,
+  GuideBridgeSessionState,
+  GuideBridgeSource,
+} from '@/common/guide-bridge-types';
 
 // Message targets for routing
 export enum MessageTarget {
@@ -50,6 +63,21 @@ export const BACKGROUND_MESSAGE_TYPES = {
   RR_SCHEDULE_FLOW: 'rr_schedule_flow',
   RR_UNSCHEDULE_FLOW: 'rr_unschedule_flow',
   RR_LIST_SCHEDULES: 'rr_list_schedules',
+  // Immersive Guide runtime
+  GUIDE_SESSION_CREATE: 'guide_session_create',
+  GUIDE_SESSION_GET: 'guide_session_get',
+  GUIDE_SESSION_LIST: 'guide_session_list',
+  GUIDE_SESSION_START: 'guide_session_start',
+  GUIDE_SESSION_ADVANCE: 'guide_session_advance',
+  GUIDE_SESSION_CANCEL: 'guide_session_cancel',
+  GUIDE_SESSION_ATTACH_TAB: 'guide_session_attach_tab',
+  GUIDE_SESSION_CHANGED: 'guide_session_changed',
+  GUIDE_BRIDGE_LIST_EVENTS: 'guide_bridge_list_events',
+  GUIDE_BRIDGE_GET_STATE: 'guide_bridge_get_state',
+  GUIDE_BRIDGE_REQUEST_HANDOFF: 'guide_bridge_request_handoff',
+  GUIDE_BRIDGE_ACCEPT_HANDOFF: 'guide_bridge_accept_handoff',
+  GUIDE_BRIDGE_RESUME: 'guide_bridge_resume',
+  GUIDE_BRIDGE_EVENT_RECORDED: 'guide_bridge_event_recorded',
   // Element marker management
   ELEMENT_MARKER_LIST_ALL: 'element_marker_list_all',
   ELEMENT_MARKER_LIST_FOR_URL: 'element_marker_list_for_url',
@@ -168,6 +196,11 @@ export const TOOL_MESSAGE_TYPES = {
   COLLECT_VARIABLES: 'collectVariables',
   // Element marker overlay control (content-side)
   ELEMENT_MARKER_START: 'element_marker_start',
+  // Guide overlay
+  GUIDE_OVERLAY_PING: 'guide_overlay_ping',
+  GUIDE_OVERLAY_SHOW: 'guide_overlay_show',
+  GUIDE_OVERLAY_UPDATE: 'guide_overlay_update',
+  GUIDE_OVERLAY_HIDE: 'guide_overlay_hide',
   // Element picker (tool-driven, background <-> content scripts)
   ELEMENT_PICKER_START: 'elementPickerStart',
   ELEMENT_PICKER_STOP: 'elementPickerStop',
@@ -392,4 +425,133 @@ export type QuickPanelCloseTabResponse = { success: true } | { success: false; e
 export interface QuickPanelCloseTabMessage {
   type: typeof BACKGROUND_MESSAGE_TYPES.QUICK_PANEL_TAB_CLOSE;
   payload: QuickPanelCloseTabPayload;
+}
+
+// ============================================================
+// Immersive Guide Runtime Contracts
+// ============================================================
+
+export interface GuideSessionCreatePayload {
+  taskId?: string;
+  title: string;
+  summary?: string;
+  source: string;
+  target?: GuideTarget;
+  tabId?: number;
+  permissionMode?: GuidePermissionMode;
+  steps: GuideStep[];
+  metadata?: Record<string, unknown>;
+  integration?: GuideIntegrationHints;
+}
+
+export type GuideSessionCreateResponse =
+  | { success: true; session: GuideSession }
+  | { success: false; error: string };
+
+export interface GuideSessionCreateMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_SESSION_CREATE;
+  payload: GuideSessionCreatePayload;
+}
+
+export interface GuideSessionGetMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_SESSION_GET;
+  sessionId: string;
+}
+
+export type GuideSessionGetResponse =
+  | { success: true; session: GuideSession | null }
+  | { success: false; error: string };
+
+export interface GuideSessionListMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_SESSION_LIST;
+}
+
+export type GuideSessionListResponse =
+  | { success: true; sessions: GuideSession[] }
+  | { success: false; error: string };
+
+export interface GuideSessionStartMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_SESSION_START;
+  sessionId: string;
+}
+
+export interface GuideSessionAdvanceMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_SESSION_ADVANCE;
+  sessionId: string;
+  action?: 'next' | 'skip';
+}
+
+export interface GuideSessionCancelMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_SESSION_CANCEL;
+  sessionId: string;
+}
+
+export interface GuideSessionAttachTabMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_SESSION_ATTACH_TAB;
+  sessionId: string;
+  tabId: number;
+}
+
+export type GuideSessionMutationResponse =
+  | { success: true; session: GuideSession }
+  | { success: false; error: string };
+
+export interface GuideSessionChangedMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_SESSION_CHANGED;
+  session: GuideSession;
+  snapshot: GuideRuntimeSnapshot;
+}
+
+export interface GuideBridgeListEventsMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_BRIDGE_LIST_EVENTS;
+  sessionId?: string;
+}
+
+export type GuideBridgeListEventsResponse =
+  | { success: true; events: GuideBridgeEventRecord[] }
+  | { success: false; error: string };
+
+export interface GuideBridgeGetStateMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_BRIDGE_GET_STATE;
+  sessionId: string;
+}
+
+export type GuideBridgeGetStateResponse =
+  | { success: true; state: GuideBridgeSessionState | null }
+  | { success: false; error: string };
+
+export interface GuideBridgeRequestHandoffMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_BRIDGE_REQUEST_HANDOFF;
+  sessionId: string;
+  target: GuideTarget;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+  bridgeSource?: GuideBridgeSource;
+}
+
+export interface GuideBridgeAcceptHandoffMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_BRIDGE_ACCEPT_HANDOFF;
+  sessionId: string;
+  target?: GuideTarget;
+  metadata?: Record<string, unknown>;
+  bridgeSource?: GuideBridgeSource;
+}
+
+export interface GuideBridgeResumeMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_BRIDGE_RESUME;
+  sessionId: string;
+  target?: GuideTarget;
+  tabId?: number;
+  metadata?: Record<string, unknown>;
+  bridgeSource?: GuideBridgeSource;
+}
+
+export type GuideBridgeSessionMutationResponse =
+  | { success: true; session: GuideSession; state: GuideBridgeSessionState | null }
+  | { success: false; error: string };
+
+export interface GuideBridgeEventRecordedMessage {
+  type: typeof BACKGROUND_MESSAGE_TYPES.GUIDE_BRIDGE_EVENT_RECORDED;
+  record: GuideBridgeEventRecord;
+  state: GuideBridgeSessionState;
 }

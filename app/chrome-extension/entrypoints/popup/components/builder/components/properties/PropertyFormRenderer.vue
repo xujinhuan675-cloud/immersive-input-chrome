@@ -209,24 +209,27 @@ const JsonField = defineComponent({
   },
 });
 
+let ArrayField: ReturnType<typeof defineComponent>;
+
+function resolveNestedFieldComponent(f: any): any {
+  const w = getWidget(f.widget);
+  if (w) return w as any;
+  if (f.type === 'string') return StringField;
+  if (f.type === 'number') return NumberField;
+  if (f.type === 'boolean') return BoolField;
+  if (f.type === 'select') return SelectField;
+  if (f.type === 'json') return JsonField;
+  if (f.type === 'object') return ObjectField;
+  if (f.type === 'array') return ArrayField;
+  return StringField;
+}
+
 const ObjectField = defineComponent({
   name: 'ObjectField',
   props: ['field', 'modelValue'],
   emits: ['update:modelValue'],
   setup(props: any, { emit }) {
     const local = ref<Record<string, any>>({ ...(props.modelValue || {}) });
-    const compOf = (f: any) => {
-      const w = getWidget(f.widget);
-      if (w) return w as any;
-      if (f.type === 'string') return StringField;
-      if (f.type === 'number') return NumberField;
-      if (f.type === 'boolean') return BoolField;
-      if (f.type === 'select') return SelectField;
-      if (f.type === 'json') return JsonField;
-      if (f.type === 'object') return ObjectField;
-      if (f.type === 'array') return ArrayField;
-      return StringField;
-    };
     watch(
       () => local.value,
       () => emit('update:modelValue', local.value),
@@ -239,7 +242,7 @@ const ObjectField = defineComponent({
         (props.field?.fields || []).map((f: any) =>
           h('div', { class: 'form-group', 'data-field': f.key, key: f.key }, [
             h('label', { class: 'form-label' }, f.label),
-            h(compOf(f), {
+            h(resolveNestedFieldComponent(f), {
               field: f,
               modelValue: local.value[f.key],
               'onUpdate:modelValue': (v: any) => (local.value = { ...local.value, [f.key]: v }),
@@ -251,9 +254,9 @@ const ObjectField = defineComponent({
   },
 });
 
-const ArrayField = defineComponent({
+ArrayField = defineComponent({
   name: 'ArrayField',
-  props: ['field', 'modelValue'],
+  props: ['field', 'modelValue', 'variables'],
   emits: ['update:modelValue'],
   setup(props: any, { emit }) {
     const items = ref<any[]>(Array.isArray(props.modelValue) ? [...props.modelValue] : []);
@@ -275,23 +278,11 @@ const ArrayField = defineComponent({
       items.value.splice(i, 1);
       update();
     };
-    const compOf = (f: any) => {
-      const w = getWidget(f.widget);
-      if (w) return w as any;
-      if (f.type === 'string') return StringField;
-      if (f.type === 'number') return NumberField;
-      if (f.type === 'boolean') return BoolField;
-      if (f.type === 'select') return SelectField;
-      if (f.type === 'json') return JsonField;
-      if (f.type === 'object') return ObjectField;
-      if (f.type === 'array') return ArrayField;
-      return StringField;
-    };
     return () =>
       h('div', { class: 'array' }, [
         ...items.value.map((_, i) =>
           h('div', { class: 'array-item', key: i }, [
-            h(compOf(props.field.item), {
+            h(resolveNestedFieldComponent(props.field.item), {
               field: props.field.item,
               modelValue: items.value[i],
               'onUpdate:modelValue': (v: any) => {

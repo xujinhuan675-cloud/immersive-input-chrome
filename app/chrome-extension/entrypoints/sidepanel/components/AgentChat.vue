@@ -63,6 +63,8 @@
             :cancelling="chat.cancelling.value"
             :can-cancel="!!chat.currentRequestId.value"
             :can-send="chat.canSend.value"
+            :can-start-guide="canStartGuideFromChat"
+            :is-guide-starting="guideLaunchBusy"
             placeholder="Ask Claude to write code..."
             :engine-name="currentEngineName"
             :selected-model="currentSessionModel"
@@ -72,6 +74,7 @@
             :enable-fake-caret="inputPreferences.fakeCaretEnabled.value"
             @update:model-value="chat.input.value = $event"
             @submit="handleSend"
+            @guide:start="handleStartGuideFromChat"
             @cancel="chat.cancelCurrentRequest()"
             @attachment:add="handleAttachmentAdd"
             @attachment:remove="attachments.removeAttachment"
@@ -212,6 +215,14 @@ import {
   getDefaultModelForCli,
 } from '@/common/agent-models';
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
+import { GUIDE_ENTRY_SOURCES, GUIDE_PERMISSION_MODES } from '@/common/guide-types';
+import {
+  buildGuideSummaryFromIntent,
+  buildGuideTitleFromIntent,
+  createGuideAnchorFromSelection,
+  launchGuideSession,
+} from '@/common/guide-session-launcher';
+import type { SelectedElementSummary } from '@/common/web-editor-types';
 
 // Local UI state
 const selectedCli = ref('');
@@ -220,6 +231,7 @@ const reasoningEffort = ref<CodexReasoningEffort>('medium');
 const useCcr = ref(false);
 const enableChromeMcp = ref(true);
 const isSavingPreference = ref(false);
+const guideLaunchBusy = ref(false);
 
 /**
  * Get normalized model value that is valid for the current CLI.
@@ -431,6 +443,15 @@ const currentAvailableReasoningEfforts = computed(() => {
   if (!session || session.engineName !== 'codex') return [] as readonly CodexReasoningEffort[];
   const effectiveModel = currentSessionModel.value || getDefaultModelForCli('codex');
   return getCodexReasoningEfforts(effectiveModel);
+});
+
+const canStartGuideFromChat = computed(() => {
+  return (
+    chat.input.value.trim().length > 0 &&
+    !guideLaunchBusy.value &&
+    !chat.isRequestActive.value &&
+    !!sessions.selectedSessionId.value
+  );
 });
 
 // Track pending history load with nonce to prevent A→B→A race conditions
@@ -1121,6 +1142,69 @@ function buildInstructionWithSelectionContext(userInput: string): string {
   return `${contextLines.join('\n')}\n\n[UserRequest]\n${userInput}`;
 }
 
+function buildGuideSelectionPageUrl(): string | undefined {
+  return (
+    webEditorTxState.selectionPageUrl.value || webEditorTxState.txState.value?.pageUrl || undefined
+  );
+}
+
+function buildGuideLaunchClientMeta(
+  selection: SelectedElementSummary | null,
+  guideSessionId: string,
+) {
+  return {
+    kind: 'guide_launch',
+    guideSessionId,
+    selectionElementKey: selection?.elementKey,
+    selectionLabel: selection?.label || selection?.fullLabel || selection?.tagName || undefined,
+  };
+}
+
+function appendGuideLaunchMessages(
+  dbSessionId: string,
+  messageText: string,
+  guideSessionId: string,
+  guideTitle: string,
+  stepCount: number,
+  selection: SelectedElementSummary | null,
+): void {
+  const requestId = `guide_${guideSessionId}`;
+  const createdAt = new Date().toISOString();
+  const clientMeta = buildGuideLaunchClientMeta(selection, guideSessionId);
+
+  const localUserMessage: AgentMessage = {
+    id: `local_guide_user_${guideSessionId}`,
+    sessionId: dbSessionId,
+    role: 'user',
+    content: messageText,
+    messageType: 'chat',
+    requestId,
+    createdAt,
+    metadata: {
+      displayText: messageText,
+      clientMeta,
+      fullContent: messageText,
+    },
+  };
+
+  const localStatusMessage: AgentMessage = {
+    id: `local_guide_status_${guideSessionId}`,
+    sessionId: dbSessionId,
+    role: 'system',
+    content: `已启动沉浸式引导“${guideTitle}”，当前共 ${stepCount} 步。请跟随页面上的高亮和步骤卡片继续操作。`,
+    messageType: 'status',
+    requestId,
+    createdAt,
+    metadata: {
+      guideSessionId,
+      stepCount,
+      source: 'plugin_chat',
+    },
+  };
+
+  chat.messages.value.push(localUserMessage, localStatusMessage);
+}
+
 // Attachment handlers
 function handleAttachmentAdd(): void {
   // Create and click a hidden file input
@@ -1241,6 +1325,99 @@ async function handleSend(): Promise<void> {
   );
 
   attachments.clearAttachments();
+}
+
+async function handleStartGuideFromChat(): Promise<void> {
+  if (guideLaunchBusy.value || chat.isRequestActive.value) {
+    return;
+  }
+
+  const dbSessionId = sessions.selectedSessionId.value;
+  if (!dbSessionId) {
+    chat.errorMessage.value = 'No session selected.';
+    return;
+  }
+
+  const messageText = chat.input.value.trim();
+  if (!messageText) return;
+
+  const selection = webEditorTxState.selectedElement.value;
+  const selectionTabId = webEditorTxState.tabId.value;
+  const selectionElementKey = selection?.elementKey ?? null;
+  const pageUrl = buildGuideSelectionPageUrl();
+  const preferredAnchor = selection ? createGuideAnchorFromSelection(selection, pageUrl) : null;
+
+  guideLaunchBusy.value = true;
+  chat.errorMessage.value = null;
+
+  try {
+    const result = await launchGuideSession({
+      tabId: selectionTabId || undefined,
+      taskId: `plugin_chat_${Date.now()}`,
+      title: buildGuideTitleFromIntent(messageText),
+      summary: buildGuideSummaryFromIntent(messageText),
+      source: GUIDE_ENTRY_SOURCES.PLUGIN_CHAT,
+      permissionMode: GUIDE_PERMISSION_MODES.CONFIRM,
+      preferredAnchor,
+      metadata: {
+        entry: 'agent_chat',
+        dbSessionId,
+        projectId: projects.selectedProjectId.value || undefined,
+        instruction: messageText,
+        pageUrl,
+      },
+      integration: {
+        bridgeKey: `agent-chat:${dbSessionId}`,
+        desktopHandoffEnabled: true,
+      },
+    });
+
+    appendGuideLaunchMessages(
+      dbSessionId,
+      messageText,
+      result.session.id,
+      result.session.title,
+      result.steps.length,
+      selection,
+    );
+
+    sessions.updateSessionPreview(dbSessionId, messageText, {
+      displayText: messageText,
+      clientMeta: buildGuideLaunchClientMeta(selection, result.session.id),
+      fullContent: messageText,
+    });
+
+    chat.input.value = '';
+    attachments.clearAttachments();
+
+    if (selectionElementKey && selectionTabId) {
+      const currentElementKey = webEditorTxState.selectedElement.value?.elementKey ?? null;
+      const currentTabId = webEditorTxState.tabId.value;
+      const isSameSelection =
+        currentElementKey === selectionElementKey && currentTabId === selectionTabId;
+
+      if (isSameSelection || currentElementKey === null) {
+        chrome.runtime
+          .sendMessage({
+            type: BACKGROUND_MESSAGE_TYPES.WEB_EDITOR_CLEAR_SELECTION,
+            payload: { tabId: selectionTabId },
+          })
+          .then((response: { success: boolean } | undefined) => {
+            if (!response?.success) {
+              clearLocalSelectionState(selectionTabId, selectionElementKey);
+            }
+          })
+          .catch(() => {
+            clearLocalSelectionState(selectionTabId, selectionElementKey);
+          });
+      }
+    }
+  } catch (error) {
+    chat.errorMessage.value =
+      error instanceof Error ? error.message : 'Failed to start immersive guide';
+  } finally {
+    guideLaunchBusy.value = false;
+  }
 }
 
 /**

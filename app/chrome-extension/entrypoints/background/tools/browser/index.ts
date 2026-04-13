@@ -22,6 +22,7 @@ export { computerTool } from './computer';
 export { handleDialogTool } from './dialog';
 export { handleDownloadTool } from './download';
 export { userscriptTool } from './userscript';
+export { immersiveGuideTool } from './immersive-guide';
 export {
   performanceStartTraceTool,
   performanceStopTraceTool,

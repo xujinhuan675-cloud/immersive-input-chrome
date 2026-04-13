@@ -601,6 +601,14 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+function toGifBlob(bytes: Uint8Array<ArrayBufferLike>): Blob {
+  const arrayBuffer = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
+  return new Blob([arrayBuffer], { type: 'image/gif' });
+}
+
 function normalizePositiveInt(value: unknown, fallback: number, max?: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return fallback;
@@ -825,7 +833,7 @@ class GifRecorderTool extends BaseBrowserToolExecutor {
             };
 
             // Save GIF file
-            const blob = new Blob([stopResult.gifData], { type: 'image/gif' });
+            const blob = toGifBlob(stopResult.gifData);
             const dataUrl = await blobToDataUrl(blob);
 
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -980,7 +988,7 @@ class GifRecorderTool extends BaseBrowserToolExecutor {
 
           if (download) {
             // Download mode
-            const blob = new Blob([lastRecordedGif.gifData], { type: 'image/gif' });
+            const blob = toGifBlob(lastRecordedGif.gifData);
             const dataUrl = await blobToDataUrl(blob);
 
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

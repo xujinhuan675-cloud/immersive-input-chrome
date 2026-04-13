@@ -28,6 +28,14 @@ import { createV3E2EHarness, type V3E2EHarness, type RpcClient } from './v3-e2e-
 
 // ==================== Test Fixtures ====================
 
+function expectSucceededResult<T>(result: T): Extract<T, { status: 'succeeded' }> {
+  expect(result).toMatchObject({ status: 'succeeded' });
+  if ((result as { status: string }).status !== 'succeeded') {
+    throw new Error('Expected node execution to succeed');
+  }
+  return result as Extract<T, { status: 'succeeded' }>;
+}
+
 /**
  * Create a Flow that uses the 'if' node with branching
  */
@@ -178,8 +186,8 @@ describe('V2 Action Adapter Integration', () => {
 
       const result = await nodeDef.execute(mockCtx as any, node as any);
 
-      expect(result.status).toBe('succeeded');
-      expect(result.next).toEqual({ kind: 'edgeLabel', label: 'yes' });
+      const succeeded = expectSucceededResult(result);
+      expect(succeeded.next).toEqual({ kind: 'edgeLabel', label: 'yes' });
     });
 
     it('evaluates falsy condition and returns false label', async () => {
@@ -210,8 +218,8 @@ describe('V2 Action Adapter Integration', () => {
 
       const result = await nodeDef.execute(mockCtx as any, node as any);
 
-      expect(result.status).toBe('succeeded');
-      expect(result.next).toEqual({ kind: 'edgeLabel', label: 'no' });
+      const succeeded = expectSucceededResult(result);
+      expect(succeeded.next).toEqual({ kind: 'edgeLabel', label: 'no' });
     });
 
     it('handles compare condition (eq)', async () => {
@@ -245,8 +253,8 @@ describe('V2 Action Adapter Integration', () => {
 
       const result = await nodeDef.execute(mockCtx as any, node as any);
 
-      expect(result.status).toBe('succeeded');
-      expect(result.next).toEqual({ kind: 'edgeLabel', label: 'true' });
+      const succeeded = expectSucceededResult(result);
+      expect(succeeded.next).toEqual({ kind: 'edgeLabel', label: 'true' });
     });
 
     it('handles branches mode', async () => {
@@ -295,8 +303,8 @@ describe('V2 Action Adapter Integration', () => {
 
       const result = await nodeDef.execute(mockCtx as any, node as any);
 
-      expect(result.status).toBe('succeeded');
-      expect(result.next).toEqual({ kind: 'edgeLabel', label: 'in-progress' });
+      const succeeded = expectSucceededResult(result);
+      expect(succeeded.next).toEqual({ kind: 'edgeLabel', label: 'in-progress' });
     });
   });
 
@@ -326,7 +334,7 @@ describe('V2 Action Adapter Integration', () => {
       const result = await nodeDef.execute(mockCtx as any, node as any);
       const elapsed = Date.now() - startTime;
 
-      expect(result.status).toBe('succeeded');
+      expectSucceededResult(result);
       expect(elapsed).toBeGreaterThanOrEqual(9); // Allow some tolerance
     });
 
@@ -357,7 +365,7 @@ describe('V2 Action Adapter Integration', () => {
       const result = await nodeDef.execute(mockCtx as any, node as any);
       const elapsed = Date.now() - startTime;
 
-      expect(result.status).toBe('succeeded');
+      expectSucceededResult(result);
       expect(elapsed).toBeGreaterThanOrEqual(14);
     });
   });
@@ -394,7 +402,8 @@ describe('V2 Action Adapter Integration', () => {
       };
 
       const result = await nodeDef.execute(mockCtx as any, node as any);
-      expect(result.next).toEqual({ kind: 'edgeLabel', label: 'true' });
+      const succeeded = expectSucceededResult(result);
+      expect(succeeded.next).toEqual({ kind: 'edgeLabel', label: 'true' });
     });
 
     it('handles OR condition', async () => {
@@ -428,7 +437,8 @@ describe('V2 Action Adapter Integration', () => {
       };
 
       const result = await nodeDef.execute(mockCtx as any, node as any);
-      expect(result.next).toEqual({ kind: 'edgeLabel', label: 'true' });
+      const succeeded = expectSucceededResult(result);
+      expect(succeeded.next).toEqual({ kind: 'edgeLabel', label: 'true' });
     });
 
     it('handles NOT condition', async () => {
@@ -459,7 +469,8 @@ describe('V2 Action Adapter Integration', () => {
       };
 
       const result = await nodeDef.execute(mockCtx as any, node as any);
-      expect(result.next).toEqual({ kind: 'edgeLabel', label: 'true' });
+      const succeeded = expectSucceededResult(result);
+      expect(succeeded.next).toEqual({ kind: 'edgeLabel', label: 'true' });
     });
 
     it('handles string comparison operators', async () => {
@@ -501,8 +512,9 @@ describe('V2 Action Adapter Integration', () => {
         };
 
         const result = await nodeDef.execute(mockCtx as any, node as any);
+        const succeeded = expectSucceededResult(result);
         const expectedLabel = expected ? 'true' : 'false';
-        expect(result.next).toEqual({ kind: 'edgeLabel', label: expectedLabel });
+        expect(succeeded.next).toEqual({ kind: 'edgeLabel', label: expectedLabel });
       }
     });
   });
