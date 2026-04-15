@@ -2,9 +2,9 @@
 
 ## Current Snapshot
 
-Status: In Progress
+Status: Closed Out (Engineering)
 Owner: Local workspace
-Goal: Browser immersive guide MVP with future Immersive-Input compatibility
+Goal: Browser immersive guide MVP is closed out and ready for phase-two expansion
 
 ## Progress Board
 
@@ -13,7 +13,7 @@ Goal: Browser immersive guide MVP with future Immersive-Input compatibility
 - [x] Add shared guide schema
 - [x] Export shared guide schema from package entry
 - [x] Re-export guide types inside extension common layer
-- [ ] Add session version migration policy
+- Carry into phase 2: session version migration policy
 
 ### 2. Browser Runtime
 
@@ -21,7 +21,7 @@ Goal: Browser immersive guide MVP with future Immersive-Input compatibility
 - [x] Add guide session persistence
 - [x] Add create/list/get/start/advance/cancel/attach-tab actions
 - [x] Add runtime event broadcasting for UI consumers
-- [ ] Add richer error classification
+- Carry into phase 2: richer error classification
 
 ### 3. Browser Overlay
 
@@ -43,6 +43,14 @@ Goal: Browser immersive guide MVP with future Immersive-Input compatibility
 - [x] Reserve integration hints in shared session schema
 - [x] Define browser-to-desktop bridge event contract
 - [x] Define handoff / resume lifecycle
+
+## Phase-1 Closeout Summary
+
+- Guide runtime, guide session persistence, overlay MVP, popup preview, built-in chat entry, external MCP entry, and bridge readiness are all landed.
+- The browser plugin surface has been narrowed into a guide-runtime-driven capability pool while mature background capabilities remain reusable.
+- Historical type debt in `tests/record-replay-v3` and `tests/web-editor-v2` has been cleaned up.
+- `pnpm --filter chrome-mcp-server compile` and `pnpm --filter chrome-mcp-server build` both pass.
+- Further expansion now moves to phase 2 instead of adding more scope to phase 1.
 
 ## Current Gate Status
 
@@ -114,11 +122,17 @@ Goal: Browser immersive guide MVP with future Immersive-Input compatibility
 - Added a shared guide task payload adapter used by popup / chat launch flow and MCP guide creation
 - Removed duplicate session-create payload assembly across internal and external entry points
 
-## Next Gatekeeping Checklist
-
-Before the next implementation slice is marked done, verify:
+## Closeout Verification
 
 1. A local entry point in the extension can create a guide session without manual message crafting.
-2. The created session can be previewed in the browser on a real page.
+2. The created session can be previewed in the browser with visual overlay and target highlighting.
 3. Advancing the session updates the overlay correctly.
 4. The session structure remains compatible with future desktop handoff.
+5. The extension codebase now meets compile-pass and build-pass handoff requirements.
+
+## Phase-2 Carryover
+
+- Session version migration policy
+- Richer runtime error classification and recovery
+- Remote connection mode and cloud MCP routing
+- Template reuse, traceability, and browser-to-desktop collaboration

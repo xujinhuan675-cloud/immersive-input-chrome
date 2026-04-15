@@ -90,6 +90,10 @@ export class NativeMessagingHost {
     stdin.on('error', () => {
       this.cleanup();
     });
+
+    // Keep the native host process alive while Chrome's stdin pipe is idle.
+    // On Windows, a readable listener alone is not enough to stop Node from exiting.
+    stdin.resume();
   }
 
   private async handleMessage(message: any): Promise<void> {

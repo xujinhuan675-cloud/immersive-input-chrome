@@ -105,16 +105,65 @@ function emitSessionChanged(session: GuideSession): void {
     .catch(() => {});
 }
 
+const GUIDE_OVERLAY_PING_TIMEOUT_MS = 350;
+const GUIDE_OVERLAY_SCRIPT_PATH = 'content-scripts/guide-overlay.js';
+
+async function pingGuideOverlay(tabId: number): Promise<boolean> {
+  try {
+    const response = (await Promise.race([
+      chrome.tabs.sendMessage(tabId, { action: TOOL_MESSAGE_TYPES.GUIDE_OVERLAY_PING }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), GUIDE_OVERLAY_PING_TIMEOUT_MS)),
+    ])) as { success?: boolean } | null;
+
+    return Boolean(response?.success);
+  } catch {
+    return false;
+  }
+}
+
+async function ensureGuideOverlayReady(tabId: number): Promise<boolean> {
+  if (await pingGuideOverlay(tabId)) {
+    return true;
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: [GUIDE_OVERLAY_SCRIPT_PATH],
+      world: 'ISOLATED',
+    } as any);
+  } catch (error) {
+    console.warn('[GuideRuntime] Failed to inject guide overlay script:', error);
+  }
+
+  return pingGuideOverlay(tabId);
+}
+
 async function sendOverlayMessage(
   tabId: number | undefined,
   action: string,
   payload?: Record<string, unknown>,
-): Promise<void> {
-  if (typeof tabId !== 'number') return;
+): Promise<boolean> {
+  if (typeof tabId !== 'number') return false;
+
+  const requiresOverlayPresence =
+    action === TOOL_MESSAGE_TYPES.GUIDE_OVERLAY_SHOW ||
+    action === TOOL_MESSAGE_TYPES.GUIDE_OVERLAY_UPDATE;
+
+  if (requiresOverlayPresence) {
+    const ready = await ensureGuideOverlayReady(tabId);
+    if (!ready) {
+      console.warn('[GuideRuntime] Guide overlay is unavailable for tab:', tabId);
+      return false;
+    }
+  }
+
   try {
     await chrome.tabs.sendMessage(tabId, { action, payload });
+    return true;
   } catch (error) {
     console.warn('[GuideRuntime] Failed to send overlay message:', action, error);
+    return false;
   }
 }
 

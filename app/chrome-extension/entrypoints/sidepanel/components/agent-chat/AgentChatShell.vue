@@ -143,6 +143,7 @@ const composerHeight = ref(120); // Default height
 const isUserScrolledUp = ref(false);
 // Threshold should account for padding and some tolerance
 const SCROLL_THRESHOLD = 150;
+type ScrollBehaviorMode = 'auto' | 'smooth';
 
 /**
  * Check if scroll position is near bottom
@@ -163,7 +164,7 @@ function handleScroll(): void {
 /**
  * Scroll to bottom of content area
  */
-function scrollToBottom(behavior: ScrollBehavior = 'smooth'): void {
+function scrollToBottom(behavior: ScrollBehaviorMode = 'smooth'): void {
   if (!contentRef.value) return;
   contentRef.value.scrollTo({
     top: contentRef.value.scrollHeight,

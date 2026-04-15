@@ -11,10 +11,11 @@
   "scripts": {
     "dev": "nodemon --watch src --ext ts,js,json --ignore dist/ --exec \"npm run build && npm run register:dev\"",
     "build": "ts-node src/scripts/build.ts",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "lint": "eslint 'src/**/*.{js,ts}'",
-    "lint:fix": "eslint 'src/**/*.{js,ts}' --fix",
+    "test": "jest --runInBand --coverage=false",
+    "test:watch": "jest --watch --coverage=false",
+    "test:coverage": "jest --runInBand",
+    "lint": "eslint src --ext .js,.ts",
+    "lint:fix": "eslint src --ext .js,.ts --fix",
     "format": "prettier --write 'src/**/*.{js,ts,json}'",
     "register:dev": "node dist/scripts/register-dev.js",
     "postinstall": "node dist/scripts/postinstall.js"

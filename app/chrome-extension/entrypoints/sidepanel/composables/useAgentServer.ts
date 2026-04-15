@@ -36,9 +36,46 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 5;
   const BASE_RECONNECT_DELAY = 1000;
+  const SERVER_READY_TIMEOUT_MS = 4000;
+  const SERVER_READY_POLL_INTERVAL_MS = 200;
 
   // Track which sessionId the current SSE connection is subscribed to
   let currentStreamSessionId: string | null = null;
+
+  function applyServerStatus(status: ServerStatus | null, connected?: boolean): void {
+    serverStatus.value = status;
+    serverPort.value = status?.port ?? null;
+    if (typeof connected === 'boolean') {
+      nativeConnected.value = connected;
+    }
+  }
+
+  function formatServerStatus(status: ServerStatus | null): string {
+    if (!status) return 'status unavailable';
+    const pieces = [
+      `isRunning=${status.isRunning}`,
+      `port=${status.port ?? 'missing'}`,
+      `lastUpdated=${new Date(status.lastUpdated).toISOString()}`,
+    ];
+    return pieces.join(', ');
+  }
+
+  async function waitForServerReady(
+    timeoutMs = SERVER_READY_TIMEOUT_MS,
+    pollIntervalMs = SERVER_READY_POLL_INTERVAL_MS,
+  ): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+      const status = await getServerStatus();
+      if (status?.isRunning && status.port) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+
+    return false;
+  }
 
   // Computed
   const isServerReady = computed(() => {
@@ -90,14 +127,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
         type: BACKGROUND_MESSAGE_TYPES.GET_SERVER_STATUS,
       });
       if (response?.serverStatus) {
-        serverStatus.value = response.serverStatus;
-        if (response.serverStatus.port) {
-          serverPort.value = response.serverStatus.port;
-        }
-        // Also update native connected status from response
-        if (typeof response.connected === 'boolean') {
-          nativeConnected.value = response.connected;
-        }
+        applyServerStatus(response.serverStatus, response.connected);
         return response.serverStatus;
       }
       return null;
@@ -124,16 +154,17 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
         connected = await startNativeHost(forceConnect);
         if (!connected) {
           console.error('Failed to connect to native host');
+          options.onError?.('Failed to connect to native host.');
           return false;
         }
-        // Wait for connection to stabilize
-        await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
-      // Step 2: Get server status
-      const status = await getServerStatus();
-      if (!status?.isRunning || !status.port) {
-        console.error('Server not running or port not available', status);
+      // Step 2: Wait for server startup acknowledgement
+      const ready = await waitForServerReady();
+      if (!ready) {
+        const message = `Server not running or port not available (${formatServerStatus(serverStatus.value)})`;
+        console.error(message);
+        options.onError?.(message);
         return false;
       }
 
@@ -248,8 +279,17 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
   }
 
   // Cleanup on unmount
+  const runtimeMessageListener = (message: { type?: string; payload?: unknown }) => {
+    if (message.type === BACKGROUND_MESSAGE_TYPES.SERVER_STATUS_CHANGED && message.payload) {
+      applyServerStatus(message.payload as ServerStatus);
+    }
+  };
+
+  chrome.runtime.onMessage.addListener(runtimeMessageListener);
+
   onUnmounted(() => {
     closeEventSource();
+    chrome.runtime.onMessage.removeListener(runtimeMessageListener);
   });
 
   return {

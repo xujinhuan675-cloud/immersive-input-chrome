@@ -162,4 +162,15 @@ Phase one cannot be marked complete until all gates below are true.
 1. [Done] External MCP entry converges into the same guide runtime
 2. [Done] Browser plugin and future `Immersive-Input` share a real bridge adapter
 3. [Done] Shared task payload format is unified across internal and external entry points
-4. [In Progress] Historical test/type debt is cleaned enough for phase-one handoff
+4. [Done] Historical test/type debt is cleaned enough for phase-one handoff
+
+## Phase-1 Closeout Result
+
+- Phase-one scope is complete: unified entry paths, unified guide runtime, overlay MVP, and bridge readiness are all delivered.
+- The current codebase passes `pnpm --filter chrome-mcp-server compile` and `pnpm --filter chrome-mcp-server build`.
+- Phase one is now treated as a closed engineering handoff baseline rather than an active feature branch.
+- Session migration strategy, richer error handling, and cloud-facing capabilities move into phase two.
+
+## Phase-2 Hand-off
+
+- Phase-two implementation planning lives in [浏览器插件二期实施方案.md](/F:/IOTO-Doc/immersive-input-chrome/docs/浏览器插件二期实施方案.md)

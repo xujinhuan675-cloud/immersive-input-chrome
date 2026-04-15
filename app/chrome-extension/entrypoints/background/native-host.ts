@@ -16,6 +16,7 @@ const RECONNECT_BASE_DELAY_MS = 500;
 const RECONNECT_MAX_DELAY_MS = 60_000;
 const RECONNECT_MAX_FAST_ATTEMPTS = 8;
 const RECONNECT_COOLDOWN_DELAY_MS = 5 * 60_000;
+const SERVER_HEALTHCHECK_TIMEOUT_MS = 1500;
 
 // ==================== Auto-connect State ====================
 
@@ -82,6 +83,70 @@ function broadcastServerStatusChange(status: ServerStatus): void {
     .catch(() => {
       // Ignore errors if no listeners are present
     });
+}
+
+function shouldReplaceServerStatus(nextStatus: ServerStatus): boolean {
+  return nextStatus.lastUpdated >= currentServerStatus.lastUpdated;
+}
+
+async function publishServerStatus(status: ServerStatus): Promise<void> {
+  currentServerStatus = status;
+  await saveServerStatus(status);
+  broadcastServerStatusChange(status);
+}
+
+async function probeServerStatus(portOverride?: unknown): Promise<ServerStatus> {
+  const port = await getPreferredPort(portOverride);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SERVER_HEALTHCHECK_TIMEOUT_MS);
+
+  let isRunning = false;
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/ping`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    isRunning = response.ok;
+  } catch {
+    isRunning = false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const nextStatus: ServerStatus = {
+    isRunning,
+    port,
+    lastUpdated: Date.now(),
+  };
+
+  const changed =
+    currentServerStatus.isRunning !== nextStatus.isRunning ||
+    currentServerStatus.port !== nextStatus.port;
+
+  if (changed) {
+    await publishServerStatus(nextStatus);
+    return nextStatus;
+  }
+
+  currentServerStatus = {
+    ...currentServerStatus,
+    port,
+  };
+  return currentServerStatus;
+}
+
+function requestServerStart(port: number, reason: string): boolean {
+  if (!nativePort) return false;
+
+  try {
+    nativePort.postMessage({ type: NativeMessageType.START, payload: { port } });
+    console.debug(`${LOG_PREFIX} Requested server start on port ${port} (${reason})`);
+    return true;
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} Failed to request server start (${reason})`, error);
+    return false;
+  }
 }
 
 // ==================== Port Normalization ====================
@@ -302,14 +367,18 @@ async function ensureNativeConnected(trigger: string, portOverride?: unknown): P
     // Sync keepalive hold
     syncKeepaliveHold();
 
+    // Get the port to use
+    const port = await getPreferredPort(portOverride);
+
     // Already connected
     if (nativePort) {
       console.debug(`${LOG_PREFIX} Already connected (trigger=${trigger})`);
+      const status = await probeServerStatus(port);
+      if (!status.isRunning) {
+        requestServerStart(port, `ensure:${trigger}`);
+      }
       return true;
     }
-
-    // Get the port to use
-    const port = await getPreferredPort(portOverride);
     console.debug(`${LOG_PREFIX} Attempting connection on port ${port} (trigger=${trigger})`);
 
     // Attempt connection
@@ -408,24 +477,20 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         }
       } else if (message.type === NativeMessageType.SERVER_STARTED) {
         const port = message.payload?.port;
-        currentServerStatus = {
+        await publishServerStatus({
           isRunning: true,
           port: port,
           lastUpdated: Date.now(),
-        };
-        await saveServerStatus(currentServerStatus);
-        broadcastServerStatusChange(currentServerStatus);
+        });
         // Server is confirmed running - now we can reset reconnect state
         resetReconnectState();
         console.log(`${SUCCESS_MESSAGES.SERVER_STARTED} on port ${port}`);
       } else if (message.type === NativeMessageType.SERVER_STOPPED) {
-        currentServerStatus = {
+        await publishServerStatus({
           isRunning: false,
           port: currentServerStatus.port, // Keep last known port for reconnection
           lastUpdated: Date.now(),
-        };
-        await saveServerStatus(currentServerStatus);
-        broadcastServerStatusChange(currentServerStatus);
+        });
         console.log(SUCCESS_MESSAGES.SERVER_STOPPED);
       } else if (message.type === NativeMessageType.ERROR_FROM_NATIVE_HOST) {
         console.error('Error from native host:', message.payload?.message || 'Unknown error');
@@ -471,7 +536,9 @@ export const initNativeHostListener = () => {
   // Initialize server status from storage
   loadServerStatus()
     .then((status) => {
-      currentServerStatus = status;
+      if (shouldReplaceServerStatus(status)) {
+        currentServerStatus = status;
+      }
     })
     .catch((error) => {
       console.error(ERROR_MESSAGES.SERVER_STATUS_LOAD_FAILED, error);
@@ -583,21 +650,28 @@ export const initNativeHostListener = () => {
     }
 
     if (message.type === BACKGROUND_MESSAGE_TYPES.GET_SERVER_STATUS) {
-      sendResponse({
-        success: true,
-        serverStatus: currentServerStatus,
-        connected: nativePort !== null,
-      });
+      ensureNativeConnected('status_get')
+        .catch(() => false)
+        .then(() => probeServerStatus())
+        .catch(() => currentServerStatus)
+        .then((status) => {
+          sendResponse({
+            success: true,
+            serverStatus: status,
+            connected: nativePort !== null,
+          });
+        });
       return true;
     }
 
     if (message.type === BACKGROUND_MESSAGE_TYPES.REFRESH_SERVER_STATUS) {
-      loadServerStatus()
-        .then((storedStatus) => {
-          currentServerStatus = storedStatus;
+      ensureNativeConnected('status_refresh')
+        .catch(() => false)
+        .then(() => probeServerStatus())
+        .then((status) => {
           sendResponse({
             success: true,
-            serverStatus: currentServerStatus,
+            serverStatus: status,
             connected: nativePort !== null,
           });
         })
